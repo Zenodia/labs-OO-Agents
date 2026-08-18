@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agent_state
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent-dev-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_state"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  control-plane:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://agent:agent-dev-only@postgres:5432/agent_state
+      CACHE_SALT_SECRET: change-me-before-any-shared-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  postgres-data:

@@ -18,6 +18,7 @@ A progressive tour of the framework. Each step is a standalone, copy-paste-runna
 | 9 | Automatic history summarization | [`09_summarization.py`](quickstart/09_summarization.py) |
 | 10 | Skills | [`10_skills.py`](quickstart/10_skills.py) |
 | 11 | MCP tools | [`11_mcp.py`](quickstart/11_mcp.py) |
+| — | Cache-aware SWE state and routing | [`cache_aware_swe/`](cache_aware_swe/) |
 | — | Sandbox, memory, multimodal, NeMo Relay | see the [Advanced](#advanced-topics) section |
 
 ---
