@@ -15,7 +15,7 @@ mkdir -p "$DYNAMO_MODEL_CACHE"
 docker compose -f "$DYNAMO_HOME/dev/docker-compose.yml" up -d
 
 docker pull "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:${DYNAMO_VERSION}"
-exec docker run --rm --gpus all --network host --ipc host \
+exec docker run --rm --name cache-aware-swe-dynamo-trtllm --gpus all --network host --ipc host \
   -v "$DYNAMO_MODEL_CACHE:/root/.cache/huggingface" \
   -e MODEL_PATH -e SERVED_MODEL_NAME \
   -e HF_TOKEN="${HF_TOKEN:-}" \

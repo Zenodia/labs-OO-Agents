@@ -272,6 +272,8 @@ streaming requests:
 ```bash
 docker compose up --build -d --force-recreate
 docker compose exec -w /app control-plane python live_dynamo_demo.py
+# Optional: show the exact prompt reuse boundary alongside the live calls.
+docker compose exec -w /app control-plane python live_dynamo_demo.py --show-prompts
 ```
 
 `live_dynamo_demo.py` sends a cold canonical first turn and an append-only
@@ -285,11 +287,34 @@ docker compose exec -w /app control-plane python live_dynamo_demo.py \
   --metrics-url http://host.docker.internal:8081/metrics
 ```
 
-Only the runtime metrics prove a physical hit or miss. One aggregated worker
-is enough to prove engine prefix reuse and TTFT improvement; it does **not**
-exercise a cross-worker Dynamo routing choice. Dynamo's documented KV-routing
-example uses two workers and therefore at least two GPUs. Do not treat two
-replicas sharing this one A100 as a performance benchmark.
+             Only the runtime metrics prove a physical hit or miss. One aggregated worker
+             is enough to prove engine prefix reuse and TTFT improvement; it does **not**
+             exercise a cross-worker Dynamo routing choice. Dynamo's documented KV-routing
+             example uses two workers and therefore at least two GPUs. Do not treat two
+             replicas sharing this one A100 as a performance benchmark.
+
+             ### Resetting the live KV cache
+
+             There is no portable OpenAI-compatible HTTP endpoint that means “delete this
+             worker's KV cache” across Dynamo/TRT-LLM versions. For a repeatable cold-cache
+             experiment, this example resets the model process itself. It clears the
+             **in-memory physical KV blocks** while preserving Postgres state, the
+             control-plane containers, Dynamo discovery services, and downloaded model
+             weights:
+
+             ```bash
+             # Review first; it requires an explicit acknowledgement.
+             bash scripts/reset_dynamo_kv_cache.sh
+             bash scripts/reset_dynamo_kv_cache.sh --yes
+
+             # Start a fresh, cold TensorRT-LLM worker.
+             bash scripts/launch_dynamo_trtllm_qwen3_8b.sh
+             ```
+
+             The launcher assigns the worker the fixed container name
+             `cache-aware-swe-dynamo-trtllm`, which is the only container the reset script
+             can remove. Do not use `docker compose down --volumes` for this purpose: that
+             would also discard durable Postgres data and is unrelated to clearing GPU KV.
 
 ## GPU choices
 

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from context_engineering import AgentRole, ContextCompiler, Handoff
-from scenarios import load_task_query, make_state, print_task_query
+from scenarios import load_task_query, make_state, print_prompt_boundary, print_task_query
 from state import dynamo_hints
 
 
@@ -111,6 +111,20 @@ def print_result(name: str, result: RequestResult) -> None:
     print("response_preview:", result.text[:400] or "<empty streamed content>")
 
 
+def print_append_only_boundary(*, label: str, prompt: str, reusable_prefix: str) -> None:
+    """Expose the same prompt-boundary view as the no-model scenario scripts."""
+    class PromptView:
+        def __init__(self, value: str) -> None:
+            self.prompt = value
+
+    print_prompt_boundary(
+        label=label,
+        current=PromptView(prompt),  # type: ignore[arg-type]
+        reusable_text=reusable_prefix,
+        reuse_allowed=True,
+    )
+
+
 def main(args: argparse.Namespace) -> None:
     task = load_task_query(args.swe_bench_record)
     print_task_query(task)
@@ -131,6 +145,18 @@ def main(args: argparse.Namespace) -> None:
     print("turn_two_logical_reused_tokens_estimate:", turn_one.estimated_tokens)
     print("turn_two_logical_new_prefill_tokens_estimate:", len(tool_return.split()))
     print("dynamo_hints_intent:", dynamo_hints(state, os.environ.get("CACHE_SALT_SECRET")))
+    if args.show_prompts:
+        print_prompt_boundary(
+            label="live cold first turn",
+            current=turn_one,
+            reusable_text="",
+            reuse_allowed=False,
+        )
+        print_append_only_boundary(
+            label="live second turn after tool return",
+            prompt=turn_two_prompt,
+            reusable_prefix=turn_one.prompt,
+        )
     print("metrics_before:")
     print("\n".join(fetch_metric_lines(args.metrics_url)))
 
@@ -153,4 +179,5 @@ if __name__ == "__main__":
     parser.add_argument("--metrics-url", default=os.environ.get("DYNAMO_METRICS_URL"))
     parser.add_argument("--swe-bench-record")
     parser.add_argument("--no-dynamo-hints", action="store_true", help="omit nvext agent-hints/cache-control for compatibility testing")
+    parser.add_argument("--show-prompts", action="store_true", help="print reused and new-prefill prompt boundaries before sending requests")
     main(parser.parse_args())
