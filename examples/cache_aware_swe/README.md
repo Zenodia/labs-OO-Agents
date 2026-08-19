@@ -181,11 +181,34 @@ On Ubuntu, with Compose already running:
 curl http://localhost:8080/healthz
 docker compose exec control-plane python demo.py
 docker compose exec control-plane python scenarios.py
+docker compose exec control-plane python scenario_multiturn.py
+# Optional: print the exact reused-prefix and new-prefill prompt text.
+docker compose exec control-plane python scenarios.py --show-prompts
+docker compose exec control-plane python scenario_multiturn.py --show-prompts
 ```
+
+Both scenario scripts print the task query first. With no additional argument,
+that query is explicitly labeled as a synthetic SWE-bench-style POC task. To
+demonstrate a real SWE-bench instance, save one dataset record (JSON, or the
+first row of a JSONL file) under `./data/`. The compose environment mounts that
+directory read-only at `/data`:
+
+```bash
+docker compose up --build
+docker compose exec control-plane python scenarios.py \
+  --swe-bench-record /data/instance.json
+docker compose exec control-plane python scenario_multiturn.py \
+  --swe-bench-record /data/instance.json --show-prompts
+```
+
+The record must contain the native SWE-bench fields `instance_id`, `repo`,
+`base_commit`, and `problem_statement`. This small adapter only loads and
+prints one already-selected instance; it does not download or evaluate the
+SWE-bench dataset.
 
 `scenarios.py` demonstrates expected eligibility for a cold first request,
 unchanged orchestrator resume, planner handoff, different-tenant isolation,
-external-provider handoff, and the compression trigger. For the first four
+and external-provider handoff. For the first four
 scenarios it also prints **estimated logical prefix reuse**: full prompt tokens,
 reusable contiguous-prefix tokens, new-prefill tokens, and logical reuse
 percentage. These are deterministic no-model estimates using this example's
@@ -193,6 +216,21 @@ lightweight token estimator; they make the policy impact visible but are **not**
 a physical GPU KV-cache hit rate. Use the target model tokenizer and a running
 Dynamo/TRT-LLM deployment to collect actual hit/miss, TTFT, and KV-transfer
 metrics.
+
+`--show-prompts` is a recording-friendly verbose mode. It prints the exact
+logical prefix boundary: `reused_prefix_text` and `new_prefill_text`, together
+with this example's whitespace-token estimates. In `scenario_multiturn.py`, it
+also prints the harness-owned compaction boundary: the retained first-turn
+prefix, followed by the new compact summary suffix.
+
+`scenario_multiturn.py` is the lifecycle continuation. It reconstructs the
+same canonical first turn used by `scenarios.py`, appends a tool-return second
+turn, then grows an autonomous trajectory until compression is required. The
+harness replaces that raw trajectory with a compact durable summary. The first
+compacted request can reuse its retained first-turn prefix; its new compact
+suffix requires prefill. A subsequent unchanged compact turn is eligible for
+full logical reuse. It is standalone by design: production continuity would be
+loaded from Postgres, not from a prior demo process.
 
 ## GPU choices
 
