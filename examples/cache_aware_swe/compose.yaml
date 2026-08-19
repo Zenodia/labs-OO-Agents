@@ -15,11 +15,15 @@ services:
 
   control-plane:
     build: .
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/data:ro
     environment:
       DATABASE_URL: postgresql://agent:agent-dev-only@postgres:5432/agent_state
       CACHE_SALT_SECRET: change-me-before-any-shared-environment
+      DYNAMO_BASE_URL: ${DYNAMO_BASE_URL:-http://host.docker.internal:8000/v1}
+      DYNAMO_MODEL: ${DYNAMO_MODEL:-Qwen/Qwen3-8B}
     depends_on:
       postgres:
         condition: service_healthy

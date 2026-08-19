@@ -241,6 +241,56 @@ suffix requires prefill. A subsequent unchanged compact turn is eligible for
 full logical reuse. It is standalone by design: production continuity would be
 loaded from Postgres, not from a prior demo process.
 
+## GPU phase: one A100 80 GB model server
+
+The current Compose services do not use a GPU. The GPU phase adds an **external
+Dynamo + TensorRT-LLM endpoint** and preserves the existing control-plane and
+Postgres services. The recommended first model is `Qwen/Qwen3-8B` in BF16 on
+the single A100 80 GB. Its weight footprint leaves meaningful room for the KV
+cache; do not start with two model families or a 30B model on this one-GPU POC.
+
+Use the official Dynamo aggregated TensorRT-LLM example as the serving baseline:
+
+```bash
+cd ~/labs-OO-Agents/examples/cache_aware_swe
+# One-time: clone the Dynamo repository and authenticate to NGC if required.
+git clone https://github.com/ai-dynamo/dynamo.git vendor/dynamo
+export DYNAMO_HOME="$PWD/vendor/dynamo"
+bash scripts/launch_dynamo_trtllm_qwen3_8b.sh
+```
+
+The script starts Dynamo's required local discovery services from the Dynamo
+checkout, downloads `Qwen/Qwen3-8B` into `./.dynamo-model-cache`, then starts
+the documented `agg.sh` TensorRT-LLM example on port `8000`. Dynamo 1.4.0's
+published TensorRT-LLM container requires an NVIDIA driver version 580 or
+newer; select a compatible Dynamo release if your remote driver is older.
+
+In a second terminal, recreate the control-plane container so Linux Docker can
+resolve `host.docker.internal` to the host GPU endpoint, then make two real
+streaming requests:
+
+```bash
+docker compose up --build -d --force-recreate
+docker compose exec -w /app control-plane python live_dynamo_demo.py
+```
+
+`live_dynamo_demo.py` sends a cold canonical first turn and an append-only
+tool-return second turn. It prints client-observed TTFT, server-reported usage
+when the endpoint provides it, and the local `nvext` agent-hints/cache-control
+request. Set `DYNAMO_METRICS_URL` or pass `--metrics-url` to fetch the
+cache/KV-named Prometheus time series exposed by your particular runtime:
+
+```bash
+docker compose exec -w /app control-plane python live_dynamo_demo.py \
+  --metrics-url http://host.docker.internal:8081/metrics
+```
+
+Only the runtime metrics prove a physical hit or miss. One aggregated worker
+is enough to prove engine prefix reuse and TTFT improvement; it does **not**
+exercise a cross-worker Dynamo routing choice. Dynamo's documented KV-routing
+example uses two workers and therefore at least two GPUs. Do not treat two
+replicas sharing this one A100 as a performance benchmark.
+
 ## GPU choices
 
 | GPU | Local model for this example | Suitable first step |
