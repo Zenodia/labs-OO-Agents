@@ -44,6 +44,13 @@ def load_task_query(record_path: str | None) -> TaskQuery:
     if record_path is None:
         return DEFAULT_TASK_QUERY
     path = Path(record_path)
+    if not path.is_file():
+        raise SystemExit(
+            f"SWE-bench record not found: {path}. "
+            "Run without --swe-bench-record for the synthetic POC query, or copy "
+            "/data/instance.json.example to /data/instance.json and replace it with "
+            "a real SWE-bench record."
+        )
     raw = path.read_text(encoding="utf-8").strip()
     payload = json.loads(raw.splitlines()[0])
     required = ("instance_id", "repo", "base_commit", "problem_statement")

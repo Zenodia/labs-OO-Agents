@@ -1,0 +1,6 @@
+{
+  "instance_id": "replace-with-real-swe-bench-instance-id",
+  "repo": "owner/repository",
+  "base_commit": "replace-with-base-commit",
+  "problem_statement": "Replace this synthetic example with the problem_statement from one selected SWE-bench record."
+}

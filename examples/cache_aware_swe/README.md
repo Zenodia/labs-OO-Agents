@@ -201,6 +201,13 @@ docker compose exec control-plane python scenario_multiturn.py \
   --swe-bench-record /data/instance.json --show-prompts
 ```
 
+For a schema-only starting point, copy the included example and replace every
+field with a real record before recording the demo:
+
+```bash
+cp data/instance.json.example data/instance.json
+```
+
 The record must contain the native SWE-bench fields `instance_id`, `repo`,
 `base_commit`, and `problem_statement`. This small adapter only loads and
 prints one already-selected instance; it does not download or evaluate the
