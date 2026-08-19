@@ -119,9 +119,13 @@ def print_prompt_boundary(
     new_prefill = new_prefill.lstrip("\n")
     print(f"\n--- {label}: logical prompt boundary (whitespace-token estimate) ---")
     print(f"reused_prefix_tokens_estimate: {len(reused.split())}")
+    print("reused_prefix_whitespace_tokens_estimate:")
+    print(reused.split() if reused else "<none>")
     print("reused_prefix_text:")
     print(reused if reused else "<none>")
     print(f"new_prefill_tokens_estimate: {len(new_prefill.split())}")
+    print("new_prefill_whitespace_tokens_estimate:")
+    print(new_prefill.split() if new_prefill else "<none>")
     print("new_prefill_text:")
     print(new_prefill if new_prefill else "<none>")
 

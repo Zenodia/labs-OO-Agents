@@ -226,7 +226,9 @@ metrics.
 
 `--show-prompts` is a recording-friendly verbose mode. It prints the exact
 logical prefix boundary: `reused_prefix_text` and `new_prefill_text`, together
-with this example's whitespace-token estimates. In `scenario_multiturn.py`, it
+with their corresponding whitespace-token sequences and estimates. These are
+not target-model BPE token IDs; live serving should use the target tokenizer for
+that exact accounting. In `scenario_multiturn.py`, it
 also prints the harness-owned compaction boundary: the retained first-turn
 prefix, followed by the new compact summary suffix.
 
