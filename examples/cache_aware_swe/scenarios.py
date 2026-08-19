@@ -38,6 +38,18 @@ def report(name: str, expectation: str, **values: object) -> None:
         print(f"{key}: {value}")
 
 
+def logical_reuse_metrics(*, current_tokens: int, reusable_tokens: int) -> dict[str, object]:
+    """Report no-model prefix eligibility in estimated tokens, not a GPU cache hit."""
+    reusable_tokens = min(current_tokens, reusable_tokens)
+    return {
+        "full_prompt_tokens_estimate": current_tokens,
+        "logical_reused_tokens_estimate": reusable_tokens,
+        "new_prefill_tokens_estimate": current_tokens - reusable_tokens,
+        "logical_prefix_reuse_pct_estimate": f"{100 * reusable_tokens / current_tokens:.1f}%",
+        "physical_kv_hit": "not measured — requires live Dynamo/TRT-LLM metrics",
+    }
+
+
 compiler = ContextCompiler()
 state = make_state()
 handoff = Handoff("Mitigate #42", "A testable patch plan")
@@ -54,12 +66,20 @@ report(
     role_prefix_hash=orchestrator.role_prefix_hash[:16],
     full_prompt_hash=orchestrator.prompt_hash[:16],
     tenant_salt_fingerprint=hashlib.sha256(state.cache_salt(SECRET).encode()).hexdigest()[:16],
+    **logical_reuse_metrics(
+        current_tokens=orchestrator.estimated_tokens,
+        reusable_tokens=0,
+    ),
 )
 report(
     "2. Orchestrator resumes unchanged",
     "Full-prefix reuse is eligible: same canonical prompt and same tenant salt.",
     full_prefix_equal=orchestrator.prompt_hash == orchestrator_resume.prompt_hash,
     tenant_salt_equal=state.cache_salt(SECRET) == state.cache_salt(SECRET),
+    **logical_reuse_metrics(
+        current_tokens=orchestrator_resume.estimated_tokens,
+        reusable_tokens=orchestrator.estimated_tokens,
+    ),
 )
 report(
     "3. Planner handoff",
@@ -67,12 +87,20 @@ report(
     shared_prefix_equal=orchestrator.shared_prefix_hash == planner.shared_prefix_hash,
     role_prefix_equal=orchestrator.role_prefix_hash == planner.role_prefix_hash,
     full_prefix_equal=orchestrator.prompt_hash == planner.prompt_hash,
+    **logical_reuse_metrics(
+        current_tokens=planner.estimated_tokens,
+        reusable_tokens=planner.shared_prefix_tokens,
+    ),
 )
 report(
     "4. Different tenant",
     "No physical reuse: the tenant-derived cache salt differs even if text overlaps.",
     shared_prefix_equal=orchestrator.shared_prefix_hash == other_tenant.shared_prefix_hash,
     tenant_salt_equal=state.cache_salt(SECRET) == other_tenant_state.cache_salt(SECRET),
+    **logical_reuse_metrics(
+        current_tokens=other_tenant.estimated_tokens,
+        reusable_tokens=0,
+    ),
 )
 report(
     "5. External provider escalation",
@@ -88,5 +116,6 @@ report(
     "6. Compression trigger",
     "Persist a compact summary and remove older raw trajectory before the next turn.",
     estimated_tokens=compressed.estimated_tokens,
+    shared_prefix_tokens_estimate=compressed.shared_prefix_tokens,
     compression_required=compressed.compression_required,
 )

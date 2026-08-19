@@ -185,9 +185,14 @@ docker compose exec control-plane python scenarios.py
 
 `scenarios.py` demonstrates expected eligibility for a cold first request,
 unchanged orchestrator resume, planner handoff, different-tenant isolation,
-external-provider handoff, and the compression trigger. It is a deterministic
-policy report, not a physical cache benchmark. Actual hit/miss, TTFT, and KV
-transfer metrics require a running Dynamo/TRT-LLM inference deployment.
+external-provider handoff, and the compression trigger. For the first four
+scenarios it also prints **estimated logical prefix reuse**: full prompt tokens,
+reusable contiguous-prefix tokens, new-prefill tokens, and logical reuse
+percentage. These are deterministic no-model estimates using this example's
+lightweight token estimator; they make the policy impact visible but are **not**
+a physical GPU KV-cache hit rate. Use the target model tokenizer and a running
+Dynamo/TRT-LLM deployment to collect actual hit/miss, TTFT, and KV-transfer
+metrics.
 
 ## GPU choices
 

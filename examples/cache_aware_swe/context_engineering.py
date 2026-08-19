@@ -58,6 +58,8 @@ class CompiledContext:
     prompt: str
     artifact_ids: tuple[str, ...]
     estimated_tokens: int
+    shared_prefix_tokens: int
+    role_prefix_tokens: int
     compression_required: bool
     shared_prefix_hash: str
     role_prefix_hash: str
@@ -74,13 +76,15 @@ class ContextCompiler:
     def compile(self, state: RunState, role: AgentRole, handoff: Handoff) -> CompiledContext:
         shared_segments = self._select_segments(state, CacheScope.SHARED)
         state_segments = self._select_segments(state, exclude_scope=CacheScope.SHARED)
+        shared_prefix = self.shared_prefix(shared_segments)
+        role_prefix = self.role_prefix(role)
         artifact_lines = [
             f"- {artifact.kind} {artifact.artifact_id}: {artifact.summary} ({artifact.uri})"
             for artifact in handoff.evidence
         ]
         sections = [
-            self.shared_prefix(shared_segments),
-            self.role_prefix(role),
+            shared_prefix,
+            role_prefix,
             "## Durable state\n" + "\n\n".join(state_segments),
             "## Handoff\n"
             + f"Goal: {handoff.goal}\nExpected output: {handoff.expected_output}\n"
@@ -93,9 +97,11 @@ class ContextCompiler:
             prompt=prompt,
             artifact_ids=tuple(artifact.artifact_id for artifact in handoff.evidence),
             estimated_tokens=estimated_tokens,
+            shared_prefix_tokens=self._estimate_tokens(shared_prefix),
+            role_prefix_tokens=self._estimate_tokens(role_prefix),
             compression_required=estimated_tokens >= self.compression_threshold,
-            shared_prefix_hash=self._hash(self.shared_prefix(shared_segments)),
-            role_prefix_hash=self._hash(self.role_prefix(role)),
+            shared_prefix_hash=self._hash(shared_prefix),
+            role_prefix_hash=self._hash(role_prefix),
             prompt_hash=self._hash(prompt),
         )
 
