@@ -59,6 +59,9 @@ class CompiledContext:
     artifact_ids: tuple[str, ...]
     estimated_tokens: int
     compression_required: bool
+    shared_prefix_hash: str
+    role_prefix_hash: str
+    prompt_hash: str
 
 
 class ContextCompiler:
@@ -69,14 +72,15 @@ class ContextCompiler:
         self.compression_threshold = int(token_budget * compression_ratio)
 
     def compile(self, state: RunState, role: AgentRole, handoff: Handoff) -> CompiledContext:
-        state_segments = self._select_segments(state)
+        shared_segments = self._select_segments(state, CacheScope.SHARED)
+        state_segments = self._select_segments(state, exclude_scope=CacheScope.SHARED)
         artifact_lines = [
             f"- {artifact.kind} {artifact.artifact_id}: {artifact.summary} ({artifact.uri})"
             for artifact in handoff.evidence
         ]
         sections = [
-            "## Shared operating policy\n" + BASE_SYSTEM_PROMPT,
-            "## Role\n" + ROLE_OVERLAY[role],
+            self.shared_prefix(shared_segments),
+            self.role_prefix(role),
             "## Durable state\n" + "\n\n".join(state_segments),
             "## Handoff\n"
             + f"Goal: {handoff.goal}\nExpected output: {handoff.expected_output}\n"
@@ -90,7 +94,20 @@ class ContextCompiler:
             artifact_ids=tuple(artifact.artifact_id for artifact in handoff.evidence),
             estimated_tokens=estimated_tokens,
             compression_required=estimated_tokens >= self.compression_threshold,
+            shared_prefix_hash=self._hash(self.shared_prefix(shared_segments)),
+            role_prefix_hash=self._hash(self.role_prefix(role)),
+            prompt_hash=self._hash(prompt),
         )
+
+    @staticmethod
+    def shared_prefix(shared_segments: list[str] | None = None) -> str:
+        suffix = "\n\n".join(shared_segments or [])
+        prefix = "## Shared operating policy\n" + BASE_SYSTEM_PROMPT
+        return prefix + ("\n\n" + suffix if suffix else "")
+
+    @staticmethod
+    def role_prefix(role: AgentRole) -> str:
+        return "## Role\n" + ROLE_OVERLAY[role]
 
     def tool_result(self, *, kind: str, summary: str, uri: str) -> Artifact:
         """Create a stable artifact reference instead of injecting raw tool output."""
@@ -106,10 +123,20 @@ class ContextCompiler:
         return max(1, len(text.split()))
 
     @staticmethod
-    def _select_segments(state: RunState) -> list[str]:
+    def _hash(text: str) -> str:
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    @staticmethod
+    def _select_segments(
+        state: RunState,
+        scope: CacheScope | None = None,
+        exclude_scope: CacheScope | None = None,
+    ) -> list[str]:
         """Keep durable state; never pass raw ephemeral scratchpads to another role."""
         return [
             f"### {segment.label}\n{segment.text.strip()}"
             for segment in state.segments
             if segment.scope != CacheScope.EPHEMERAL
+            and (scope is None or segment.scope == scope)
+            and (exclude_scope is None or segment.scope != exclude_scope)
         ]

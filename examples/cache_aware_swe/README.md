@@ -146,18 +146,22 @@ or Dynamo deployment.
 ```bash
 cd examples/cache_aware_swe
 docker compose up --build
-curl.exe http://localhost:8080/healthz
+curl http://localhost:8080/healthz
 ```
 
-In PowerShell, this is equivalent:
+On Windows PowerShell, use either:
 
 ```powershell
+curl.exe http://localhost:8080/healthz
 Invoke-RestMethod http://localhost:8080/healthz
 ```
 
-Expect `{"ready":true}`. Use `docker compose down` to stop it. Add `--volumes`
-only when you intentionally want to discard Postgres state. Replace the
-development database password and `CACHE_SALT_SECRET` before shared use.
+Expect `{"ready":true}`. `docker compose down` stops and removes this
+Compose stack's containers and network, but keeps downloaded/built images.
+Add `--volumes` only when you intentionally want to discard Postgres state;
+add `--rmi local` only when you intentionally want to remove the locally built
+control-plane image. Replace the development database password and
+`CACHE_SALT_SECRET` before shared use.
 
 ## Files and demo
 
@@ -169,10 +173,21 @@ development database password and `CACHE_SALT_SECRET` before shared use.
 | `nooa_agent.py` | Minimal NOOA harness surface |
 | `compose.yaml` | Postgres and health-service environment |
 | `demo.py` | No-model policy/context-compilation demo |
+| `scenarios.py` | No-model walkthrough of expected KV-reuse eligibility |
+
+On Ubuntu, with Compose already running:
 
 ```bash
-uv run python examples/cache_aware_swe/demo.py
+curl http://localhost:8080/healthz
+docker compose exec control-plane python demo.py
+docker compose exec control-plane python scenarios.py
 ```
+
+`scenarios.py` demonstrates expected eligibility for a cold first request,
+unchanged orchestrator resume, planner handoff, different-tenant isolation,
+external-provider handoff, and the compression trigger. It is a deterministic
+policy report, not a physical cache benchmark. Actual hit/miss, TTFT, and KV
+transfer metrics require a running Dynamo/TRT-LLM inference deployment.
 
 ## GPU choices
 
